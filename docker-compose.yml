@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  web:
+    build:
+        context: .
+        dockerfile: front.Dockerfile
+    image: nginx:1.19
+    ports:
+      - "80:80"
+    deploy:
+      replicas: 3
+    volumes:
+      - cfg:/home/davinci/cfg
+volumes:
+   cfg:
+      external: true
