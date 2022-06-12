@@ -1,17 +1,85 @@
-version: '3'
+version: "3.2"
 
 services:
   web:
+    image: shaft_web:latest
     build:
-        context: .
-        dockerfile: front.Dockerfile
-    image: nginx:1.19
-    ports:
-      - "80:80"
+      context: .
+      dockerfile: front.Dockerfile
+    depends_on:
+      - proxy
     deploy:
-      replicas: 3
+      replicas: 1
+      endpoint_mode: dnsrr
+    networks:
+      - webnetwork
     volumes:
-      - cfg:/home/davinci/cfg
-volumes:
-   cfg:
-      external: true
+      - ./shaft-fe:/home/shaft/shaft-fe
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+  php:
+    image: shaft_php:latest
+    build:
+      context: .
+      dockerfile: back.Dockerfile
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+    depends_on:
+      - proxy
+    environment:
+      SERVICE_NAME: php
+      SERVICE_TAGS: dev
+      PHP_IDE_CONFIG: serverName=BeServer
+    networks:
+      - webnetwork
+    volumes:
+      - ./shaft-be:/home/shaft/shaft-be
+  proxy:
+    image: shaft_proxy:latest
+    build:
+      context: .
+      dockerfile: proxy.Dockerfile
+    deploy:
+      mode: global
+    ports:
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: host
+      - target: 443
+        published: 443
+        protocol: tcp
+        mode: host
+    dns: 127.0.0.11
+    networks:
+      - webnetwork
+  redis:
+    image: redis:alpine
+    depends_on:
+      - php
+    networks:
+      - webnetwork
+    volumes:
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - 6379:6379
+  maria:
+    image: mariadb:10.5.9
+    depends_on:
+      - php
+    networks:
+      - webnetwork
+      - mynet
+    volumes:
+      - ./config/my.cnf:/etc/mysql/conf.d/my.cnf
+      - ./data/db:/var/lib/mysql
+    ports:
+      - 3306:3306
+    env_file:
+      - ./config/my.env
+networks:
+  webnetwork:
+    driver: overlay
+    attachable: true
+  mynet:
